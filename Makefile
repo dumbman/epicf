@@ -5,22 +5,22 @@ SHELL:=/bin/bash -O extglob
 ##### Prll
 #export OMPI_CXX=clang++
 CC = mpic++
-HDF5FLAGS=-I/usr/include/hdf5/openmpi -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_BSD_SOURCE -D_FORTIFY_SOURCE=2 -g -fstack-protector-strong -Wformat -Werror=format-security
-PETSCFLAGS=-isystem /usr/include/petsc
-OCEFLAGS=-isystem /usr/include/oce
-SUPPRESS_MPI_C11_WARNING=-Wno-literal-suffix
+#CC = mpiicpc 
+HDF5FLAGS=-isystem${HOME}/hdf5/usr/include/openmpi-x86_64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_BSD_SOURCE 
+PETSCFLAGS=-isystem${HOME}/petsc/arch-linux2-cxx-debug/include/ -isystem${HOME}/petsc/include/
+OCEFLAGS=-isystem${HOME}/OCE/usr/include/oce -isystem${HOME}/OCE/usr/include
 WARNINGS=-Wall -fbounds-check -Warray-bounds -fsanitize=address
-CFLAGS = ${HDF5FLAGS} ${PETSCFLAGS} ${OCEFLAGS} -O2 -std=c++11 ${WARNINGS} ${SUPPRESS_MPI_C11_WARNING}
+CFLAGS = ${HDF5FLAGS} ${PETSCFLAGS} ${OCEFLAGS} -O2 -std=c++11
 LDFLAGS = 
 
 ### Libraries
-COMMONLIBS=-lm -fsanitize=address
-SANITIZER=-lasan
+COMMONLIBS=-lm
 BOOSTLIBS=-lboost_program_options
-PETSCLIBS=-lpetsc
-HDF5LIBS=-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi -lhdf5_hl -lhdf5 -Wl,-z,relro -lpthread -lz -ldl -lm -Wl,-rpath -Wl,/usr/lib/x86_64-linux-gnu/hdf5/openmpi
-OPENCASCADELIBS=-lTKXSBase -lTKernel -lTKBRep -lTKMath -lTKSTEP -lTKBool -lTKTopAlgo -lTKPrim
-LIBS=${COMMONLIBS} ${BOOSTLIBS} ${PETSCLIBS} ${HDF5LIBS} ${OPENCASCADELIBS} ${SANITIZER}
+PETSCLIBS=-L${HOME}/petsc/arch-linux2-cxx-debug/lib/ -lpetsc
+OPENCASCADELIBS=-L${HOME}/OCE/usr/lib64 -lTKXSBase -lTKernel -lTKBRep -lTKMath -lTKSTEP -lTKBool -lTKTopAlgo -lTKPrim -Wl,-rpath -Wl,${HOME}/OCE/usr/lib64
+HDF5LIBS=-L${HOME}/hdf5/usr/lib64/openmpi/lib -lhdf5_hl -lhdf5 -Wl,-z,relro -lpthread -lz -ldl -lm -Wl,-rpath -Wl,${HOME}/hdf5/usr/lib64/openmpi/lib
+LIBS=${COMMONLIBS} ${BOOSTLIBS} ${PETSCLIBS} ${OPENCASCADELIBS} ${HDF5LIBS}
+
 
 ### Sources and executable
 CPPSOURCES=$(wildcard *.cpp)

@@ -1,13 +1,13 @@
 #ifndef _DOMAIN_H_
 #define _DOMAIN_H_
 
+#include <mpi.h>
 #include <iostream>
 #include <iomanip>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <functional>
-#include <mpi.h>
 #include <hdf5.h>
 #include "config.h"
 #include "time_grid.h"
