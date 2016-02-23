@@ -13,11 +13,13 @@ Domain::Domain( Config &conf ) :
     time_grid( conf ),
     spat_mesh( conf ),
     inner_regions( conf, spat_mesh ),
+    charged_inner_regions( conf, spat_mesh ),
     particle_to_mesh_map( ),
     field_solver( spat_mesh, inner_regions ),
     particle_sources( conf ),
     external_magnetic_field( conf )
 {
+    charged_inner_regions.print();
     return;
 }
 
@@ -69,10 +71,30 @@ void Domain::advance_one_time_step()
 
 void Domain::eval_charge_density()
 {
-    spat_mesh.clear_old_density_values();
+    spat_mesh.clear_old_density_values();    
     particle_to_mesh_map.weight_particles_charge_to_mesh( spat_mesh, particle_sources );
+    // add_charge_from_charged_inner_regions()
+    // should go after particle_to_mesh_map.weight_particles_charge_to_mesh()
+    // otherwise inner_region charge would be counted N_of_proc times.
+    // way to avoid: gather charge from particle at separate array, then transfer
+    // to spat_mesh.charge_density. 
+    add_charge_from_charged_inner_regions(); 
     
     return;
+}
+
+void Domain::add_charge_from_charged_inner_regions()
+{
+    // todo: move funtion to spat_mesh or somewhere else.    
+    int i,j,k;
+    for( auto &region : charged_inner_regions.regions ){
+	for( auto &inner_node : region.inner_nodes_not_at_domain_edge ){
+	    i = inner_node.x;
+	    j = inner_node.y;
+	    k = inner_node.z;
+	    spat_mesh.charge_density[i][j][k] += region.charge_density;
+	}
+    }
 }
 
 void Domain::eval_potential_and_fields()
@@ -158,25 +180,31 @@ void Domain::update_position( double dt )
 void Domain::apply_domain_boundary_conditions()
 {
     for( auto &src : particle_sources.sources ) {
-	src.particles.erase( 
-	    std::remove_if( 
-		std::begin( src.particles ), 
-		std::end( src.particles ), 
-		[this]( Particle &p ){ return out_of_bound(p); } ), 
-	    std::end( src.particles ) );
+    	auto remove_starting_from = std::remove_if( 
+    	    std::begin( src.particles ), 
+    	    std::end( src.particles ), 
+    	    [this]( Particle &p ){ return out_of_bound(p); } ); 
+    	// cout << "Out of bound from " << src.name << ":" << " "
+    	//      << std::end( src.particles ) - remove_starting_from << std::endl;
+    	src.particles.erase(
+    	    remove_starting_from,
+    	    std::end( src.particles ) );
     }
+
     return;
 }
 
 void Domain::remove_particles_inside_inner_regions()
 {
     for( auto &src : particle_sources.sources ) {
-	src.particles.erase( 
-	    std::remove_if( 
-		std::begin( src.particles ), 
-		std::end( src.particles ), 
-		[this]( Particle &p ){ return inner_regions.check_if_particle_inside( p ); } ), 
-	    std::end( src.particles ) );
+	auto remove_starting_from = std::remove_if( 
+	    std::begin( src.particles ), 
+	    std::end( src.particles ), 
+	    [this]( Particle &p ){
+		return inner_regions.check_if_particle_inside_and_count_charge( p );
+	    } ); 
+	inner_regions.sync_absorbed_charge_and_particles_across_proc();
+	src.particles.erase( remove_starting_from, std::end( src.particles ) );
     }
     return;
 }
@@ -192,6 +220,7 @@ bool Domain::out_of_bound( const Particle &p )
 	( x >= spat_mesh.x_volume_size ) || ( x <= 0 ) ||
 	( y >= spat_mesh.y_volume_size ) || ( y <= 0 ) ||
 	( z >= spat_mesh.z_volume_size ) || ( z <= 0 ) ;
+	
     return out;
 
 }
@@ -269,6 +298,7 @@ void Domain::write( Config &conf )
     spat_mesh.write_to_file( output_file );
     external_magnetic_field.write_to_file( output_file );
     particle_sources.write_to_file( output_file );
+    inner_regions.write_to_file( output_file );
 
     status = H5Pclose( plist_id ); hdf5_status_check( status );
     status = H5Fclose( output_file ); hdf5_status_check( status );
@@ -316,6 +346,7 @@ void Domain::eval_and_write_fields_without_particles( Config &conf )
     herr_t status;
 
     spat_mesh.clear_old_density_values();
+    add_charge_from_charged_inner_regions();
     eval_potential_and_fields();
 
     std::string output_filename_prefix = 
