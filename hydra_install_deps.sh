@@ -1,5 +1,7 @@
-# Install PETSc
 module add openmpi/1.8.1
+module add gcc-4.8
+
+# Install PETSc
 cd
 #git clone -b maint https://bitbucket.org/petsc/petsc petsc
 wget http://ftp.mcs.anl.gov/pub/petsc/release-snapshots/petsc-lite-3.6.2.tar.gz
@@ -7,7 +9,10 @@ tar -xvzf petsc-lite-3.6.2.tar.gz
 rm petsc-lite-3.6.2.tar.gz
 mv petsc-3.6.2 petsc
 cd petsc
-./configure --with-cc=mpicc --with-cxx=mpic++ --with-fc=0 --with-clanguage=cxx
+./configure --with-cc=mpicc --with-cxx=mpic++ --with-fc=0 --with-clanguage=cxx \
+	--download-hypre=yes --download-metis=yes --download-parmetis=yes \
+	#--download-mumps=yes --with-scalapack --with-fc=gfortran \
+	--download-superlu_dist --with-debugging=0
 make PETSC_DIR=${HOME}/petsc PETSC_ARCH=arch-linux2-cxx-debug all
 make PETSC_DIR=${HOME}/petsc PETSC_ARCH=arch-linux2-cxx-debug test
 
