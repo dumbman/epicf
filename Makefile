@@ -7,7 +7,7 @@ SHELL:=/bin/bash -O extglob
 CC = mpic++
 #CC = mpiicpc 
 HDF5FLAGS=-isystem${HOME}/hdf5/usr/include/openmpi-x86_64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_BSD_SOURCE 
-PETSCFLAGS=-isystem${HOME}/petsc/arch-linux2-cxx-opt/include/ -isystem${HOME}/petsc/include/
+PETSCFLAGS=-isystem${HOME}/petsc/opt/include/
 OCEFLAGS=-isystem${HOME}/OCE/usr/include/oce -isystem${HOME}/OCE/usr/include
 WARNINGS=-Wall -fbounds-check -Warray-bounds -fsanitize=address
 CFLAGS = ${HDF5FLAGS} ${PETSCFLAGS} ${OCEFLAGS} -O2 -std=c++11
@@ -16,7 +16,7 @@ LDFLAGS =
 ### Libraries
 COMMONLIBS=-lm
 BOOSTLIBS=-lboost_program_options
-PETSCLIBS=-L${HOME}/petsc/arch-linux2-cxx-opt/lib/ -lpetsc
+PETSCLIBS=-L${HOME}/petsc/opt/lib/ -lpetsc
 OPENCASCADELIBS=-L${HOME}/OCE/usr/lib64 -lTKXSBase -lTKernel -lTKBRep -lTKMath -lTKSTEP -lTKBool -lTKTopAlgo -lTKPrim -Wl,-rpath -Wl,${HOME}/OCE/usr/lib64
 HDF5LIBS=-L${HOME}/hdf5/usr/lib64/openmpi/lib -lhdf5_hl -lhdf5 -Wl,-z,relro -lpthread -lz -ldl -lm -Wl,-rpath -Wl,${HOME}/hdf5/usr/lib64/openmpi/lib
 LIBS=${COMMONLIBS} ${BOOSTLIBS} ${PETSCLIBS} ${OPENCASCADELIBS} ${HDF5LIBS}
