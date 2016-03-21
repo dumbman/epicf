@@ -2,6 +2,10 @@ module add openmpi/1.8.1
 module add gcc-4.8
 
 # Install PETSc
+cd
+mkdir petsc
+mkdir petsc/debug
+mkdir petsc/opt
 ### get source
 #git clone -b maint https://bitbucket.org/petsc/petsc petsc
 wget http://ftp.mcs.anl.gov/pub/petsc/release-snapshots/petsc-lite-3.6.2.tar.gz
