@@ -1,3 +1,7 @@
+# Create folder for output
+mkdir out
+
+# Install dependencies
 module add openmpi/1.8.1
 module add gcc-4.8
 
