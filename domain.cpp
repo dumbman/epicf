@@ -13,21 +13,56 @@ Domain::Domain( Config &conf ) :
     time_grid( conf ),
     spat_mesh( conf ),
     inner_regions( conf, spat_mesh ),
-    charged_inner_regions( conf, spat_mesh ),
-    particle_to_mesh_map( ),
+    particle_to_mesh_map(),
     field_solver( spat_mesh, inner_regions ),
     particle_sources( conf ),
-    external_magnetic_field( conf )
+    external_magnetic_field( conf ),
+    particle_interaction_model( conf )
 {
-    charged_inner_regions.print();
+    output_filename_prefix = conf.output_filename_config_part.output_filename_prefix;
+    output_filename_suffix = conf.output_filename_config_part.output_filename_suffix;    
     return;
 }
+
+Domain::Domain( hid_t h5file_id ) :
+    time_grid( H5Gopen( h5file_id, "/Time_grid", H5P_DEFAULT ) ),
+    spat_mesh( H5Gopen( h5file_id, "/Spatial_mesh", H5P_DEFAULT ) ),
+    inner_regions( H5Gopen( h5file_id, "/Inner_regions", H5P_DEFAULT ), spat_mesh ),
+    particle_to_mesh_map(),
+    field_solver( spat_mesh, inner_regions ),
+    particle_sources( H5Gopen( h5file_id, "/Particle_sources", H5P_DEFAULT ) ),
+    external_magnetic_field( H5Gopen( h5file_id, "/External_magnetic_field", H5P_DEFAULT ) ),
+    particle_interaction_model( H5Gopen( h5file_id, "/Particle_interaction_model", H5P_DEFAULT ) )
+{
+    return;
+}
+
 
 //
 // Pic simulation 
 //
 
-void Domain::run_pic( Config &conf )
+void Domain::start_pic_simulation()
+{
+    // fields in domain without any particles
+    eval_and_write_fields_without_particles();
+    // generate particles and write initial step
+    prepare_leap_frog();
+    write_step_to_save();
+    // run simulation
+    run_pic();
+
+    return;
+}
+
+void Domain::continue_pic_simulation()
+{
+    run_pic();
+    return;
+}
+
+
+void Domain::run_pic()
 {
     int mpi_process_rank;
     MPI_Comm_rank( PETSC_COMM_WORLD, &mpi_process_rank );
@@ -36,16 +71,13 @@ void Domain::run_pic( Config &conf )
     total_time_iterations = time_grid.total_nodes - 1;
     current_node = time_grid.current_node;
 
-    prepare_leap_frog();
-    write_step_to_save( conf );
-
     for ( int i = current_node; i < total_time_iterations; i++ ){
 	if ( mpi_process_rank == 0 ){
 	    std::cout << "Time step from " << i << " to " << i+1
 		      << " of " << total_time_iterations << std::endl;
 	}
     	advance_one_time_step();
-    	write_step_to_save( conf );
+    	write_step_to_save();
     }
 
     return;
@@ -53,19 +85,29 @@ void Domain::run_pic( Config &conf )
 
 void Domain::prepare_leap_frog()
 {
-    eval_charge_density();
-    eval_potential_and_fields();
-    shift_velocities_half_time_step_back();
+    if ( particle_interaction_model.noninteracting ){
+	shift_velocities_half_time_step_back();
+    } else if ( particle_interaction_model.pic ){
+	eval_charge_density();
+	eval_potential_and_fields();
+	shift_velocities_half_time_step_back();
+    }
     return;
 }
 
 void Domain::advance_one_time_step()
-{
-    push_particles();
-    apply_domain_constrains();
-    eval_charge_density();
-    eval_potential_and_fields();
-    update_time_grid();
+{    
+    if ( particle_interaction_model.noninteracting ){
+	push_particles();
+	apply_domain_constrains();
+	update_time_grid();
+    } else if ( particle_interaction_model.pic ){
+	push_particles();
+	apply_domain_constrains();
+	eval_charge_density();
+	eval_potential_and_fields();
+	update_time_grid();
+    }
     return;
 }
 
@@ -73,29 +115,10 @@ void Domain::eval_charge_density()
 {
     spat_mesh.clear_old_density_values();    
     particle_to_mesh_map.weight_particles_charge_to_mesh( spat_mesh, particle_sources );
-    // add_charge_from_charged_inner_regions()
-    // should go after particle_to_mesh_map.weight_particles_charge_to_mesh()
-    // otherwise inner_region charge would be counted N_of_proc times.
-    // way to avoid: gather charge from particle at separate array, then transfer
-    // to spat_mesh.charge_density. 
-    add_charge_from_charged_inner_regions(); 
     
     return;
 }
 
-void Domain::add_charge_from_charged_inner_regions()
-{
-    // todo: move funtion to spat_mesh or somewhere else.    
-    int i,j,k;
-    for( auto &region : charged_inner_regions.regions ){
-	for( auto &inner_node : region.inner_nodes_not_at_domain_edge ){
-	    i = inner_node.x;
-	    j = inner_node.y;
-	    k = inner_node.z;
-	    spat_mesh.charge_density[i][j][k] += region.charge_density;
-	}
-    }
-}
 
 void Domain::eval_potential_and_fields()
 {
@@ -112,9 +135,12 @@ void Domain::push_particles()
 
 void Domain::apply_domain_constrains()
 {
-    apply_domain_boundary_conditions();
-    remove_particles_inside_inner_regions();
+    // First generate then remove.
+    // This allows for overlap of source and inner region.
     generate_new_particles();
+
+    apply_domain_boundary_conditions();
+    remove_particles_inside_inner_regions();    
     return;
 }
 
@@ -247,24 +273,19 @@ void Domain::update_time_grid()
 // Write domain to file
 //
 
-void Domain::write_step_to_save( Config &conf )
+void Domain::write_step_to_save()
 {
     int current_step = time_grid.current_node;
     int step_to_save = time_grid.node_to_save;
     if ( ( current_step % step_to_save ) == 0 ){	
-	write( conf );
+	write();
     }
     return;
 }
 
-void Domain::write( Config &conf )
+void Domain::write()
 {    
-    herr_t status;
-    
-    std::string output_filename_prefix = 
-	conf.output_filename_config_part.output_filename_prefix;
-    std::string output_filename_suffix = 
-	conf.output_filename_config_part.output_filename_suffix;
+    herr_t status;    
     std::string file_name_to_write;
     
     file_name_to_write = construct_output_filename( output_filename_prefix, 
@@ -299,6 +320,7 @@ void Domain::write( Config &conf )
     external_magnetic_field.write_to_file( output_file );
     particle_sources.write_to_file( output_file );
     inner_regions.write_to_file( output_file );
+    particle_interaction_model.write_to_file( output_file );
 
     status = H5Pclose( plist_id ); hdf5_status_check( status );
     status = H5Fclose( output_file ); hdf5_status_check( status );
@@ -334,6 +356,12 @@ Domain::~Domain()
 //
 // Various functions
 //
+void Domain::set_output_filename_prefix_and_suffix( std::string prefix, std::string suffix )
+{
+    output_filename_prefix = prefix;
+    output_filename_suffix = suffix;
+}
+
 
 void Domain::print_particles() 
 {
@@ -341,18 +369,13 @@ void Domain::print_particles()
     return;
 }
 
-void Domain::eval_and_write_fields_without_particles( Config &conf )
+void Domain::eval_and_write_fields_without_particles()
 {
     herr_t status;
 
     spat_mesh.clear_old_density_values();
-    add_charge_from_charged_inner_regions();
     eval_potential_and_fields();
 
-    std::string output_filename_prefix = 
-	conf.output_filename_config_part.output_filename_prefix;
-    std::string output_filename_suffix = 
-	conf.output_filename_config_part.output_filename_suffix;
     std::string file_name_to_write;
     
     file_name_to_write = output_filename_prefix + 
