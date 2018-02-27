@@ -22,6 +22,10 @@ Config::Config( const std::string &filename )
 		std::string source_name = section_name.substr( section_name.find(".") + 1 );
 		sources_config_part.push_back(
 		    new Particle_source_cylinder_config_part( source_name, sections.second ) );
+            } else if ( section_name.find( "Particle_source_tube." ) != std::string::npos ) {
+		std::string source_name = section_name.substr( section_name.find(".") + 1 );
+		sources_config_part.push_back(
+		    new Particle_source_tube_config_part( source_name, sections.second ) );
 	    } else if ( section_name.find( "Inner_region_box." ) != std::string::npos ) {
 		std::string inner_region_name = section_name.substr( section_name.find(".") + 1 );
 		inner_regions_config_part.push_back(
