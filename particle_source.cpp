@@ -719,7 +719,7 @@ void Particle_source_box::check_correctness_of_related_config_fields(
 {
     x_right_ge_zero( conf, src_conf );
     x_right_le_particle_source_x_left( conf, src_conf );
-    x_left_le_grid_x_size( conf, src_conf );
+    x_left_le_grid_x_size( conf, src_conf );    
     y_bottom_ge_zero( conf, src_conf );
     y_bottom_le_particle_source_y_top( conf, src_conf );
     y_top_le_grid_y_size( conf, src_conf );
@@ -886,14 +886,14 @@ void Particle_source_box::write_hdf5_source_parameters( hid_t current_source_gro
 Vec3d Particle_source_box::uniform_position_in_source(
     std::default_random_engine &rnd_gen )
 {
-    return uniform_position_in_cube( xleft, ytop, zfar,
-				     xright, ybottom, znear,
+    return uniform_position_in_cube( xright, ytop, zfar,
+				     xleft, ybottom, znear,
 				     rnd_gen );
 }
 
 Vec3d Particle_source_box::uniform_position_in_cube( 
-    const double xleft,  const double ytop, const double zfar,
-    const double xright, const double ybottom, const double znear,
+    const double xright,  const double ytop, const double zfar,
+    const double xleft, const double ybottom, const double znear,
     std::default_random_engine &rnd_gen )
 {
     return vec3d_init( random_in_range( xright, xleft, rnd_gen ), 
