@@ -16,3 +16,14 @@ TAGS
 *.pyc
 *.png
 !doc/figs
+=======
+*.pyc
+__pycache__
+*~
+\#*\#
+*.h5
+*.png
+.idea/
+venv/
+.ipynb_checkpoints/
+.pytest_cache/
